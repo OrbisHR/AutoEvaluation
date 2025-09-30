@@ -423,130 +423,120 @@
                 document.getElementById('evaluation-container').classList.add('hidden');
             });
             
-            function handleFileUpload() {
-                const file = fileInput.files[0];
-                if (!file) return;
-                
-                fileName.textContent = file.name;
-                fileInfo.classList.remove('hidden');
-                
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    
-                    // Get the first sheet
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    
-                    // Convert to JSON
-                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                    
-                    // Process the data to extract objectives and user info
-                    const { objectives, collaborateurName, managerName, societe } = processExcelData(jsonData);
-                    
-                    // Fill user info if found in the file
-                    if (collaborateurName) {
-                        document.getElementById('collaborateur-name').value = collaborateurName;
-                    }
-                    if (managerName) {
-                        document.getElementById('manager-name').value = managerName;
-                    }
-                    if (societe) {
-                        document.getElementById('collaborateur-societe').value = societe;
-                    }
-                    
-                    if (objectives.length > 0) {
-                        // Show evaluation container
-                        document.getElementById('evaluation-container').classList.remove('hidden');
-                        
-                        // Render evaluation items
-                        renderEvaluationItems(objectives);
-                        
-                        // Switch to evaluation tab
-                        evaluationTab.click();
-                        
-                        showAlert('Fichier importé avec succès! Les objectifs sont maintenant disponibles pour évaluation.', 'success');
-                    } else {
-                        showAlert('Aucun objectif trouvé dans le fichier. Veuillez vérifier le format du fichier.', 'error');
-                    }
-                };
-                
-                reader.readAsArrayBuffer(file);
+           function handleFileUpload() {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    fileName.textContent = file.name;
+    fileInfo.classList.remove('hidden');
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        // Get the first sheet
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+        // Convert to JSON with header row
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+        // Process the data
+        const { objectives, collaborateurName, managerName, societe } = processExcelData(jsonData);
+
+        // Remplir les champs utilisateur si dispo
+        if (collaborateurName) {
+            document.getElementById('collaborateur-name').value = collaborateurName;
+        }
+        if (managerName) {
+            document.getElementById('manager-name').value = managerName;
+        }
+        if (societe) {
+            document.getElementById('collaborateur-societe').value = societe;
+        }
+
+        if (objectives.length > 0) {
+            document.getElementById('evaluation-container').classList.remove('hidden');
+            renderEvaluationItems(objectives);
+            evaluationTab.click();
+            showAlert('Fichier importé avec succès! Les objectifs sont maintenant disponibles pour évaluation.', 'success');
+        } else {
+            showAlert('Aucun objectif trouvé dans le fichier. Veuillez vérifier le format du fichier.', 'error');
+        }
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+
+function processExcelData(data) {
+    const objectives = [];
+    let collaborateurName = '';
+    let managerName = '';
+    let societe = '';
+    let header = null;
+
+    for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        if (!row || row.length === 0) continue;
+
+        // Première ligne = entête
+        if (!header) {
+            header = row.map(h => h ? h.toString().trim().toLowerCase() : "");
+            continue;
+        }
+
+        // Construire un objectif basé sur l’entête
+        const obj = {};
+        header.forEach((col, idx) => {
+            if (!col) return;
+            switch (col) {
+                case "nom de collaborateur":
+                    obj.collaborateurName = row[idx] ? row[idx].toString().trim() : "";
+                    break;
+                case "société":
+                    obj.societe = row[idx] ? row[idx].toString().trim() : "";
+                    break;
+                case "nom du manager":
+                    obj.managerName = row[idx] ? row[idx].toString().trim() : "";
+                    break;
+                case "objectif":
+                    obj.description = row[idx] ? row[idx].toString().trim() : "";
+                    break;
+                case "poids (%)":
+                    obj.weight = row[idx] ? parseFloat(row[idx]) || 0 : 0;
+                    break;
+                case "seuil de départ":
+                    obj.floor = row[idx] ? row[idx].toString().trim() : "";
+                    break;
+                case "satisfaisant":
+                    obj.satisfactory = row[idx] ? row[idx].toString().trim() : "";
+                    break;
+                case "bonne performance":
+                    obj.goodPerformance = row[idx] ? row[idx].toString().trim() : "";
+                    break;
+                case "cible":
+                    obj.target = row[idx] ? row[idx].toString().trim() : "";
+                    break;
+                case "type":
+                    obj.type = row[idx] ? row[idx].toString().trim() : "";
+                    break;
             }
-            
-            function processExcelData(data) {
-                const objectives = [];
-                let foundHeader = false;
-                let collaborateurName = '';
-                let managerName = '';
-                let societe = '';
-                
-                // Look for user info and objectives in the Excel data
-                for (let i = 0; i < data.length; i++) {
-                    const row = data[i];
-                    
-                    // Skip empty rows
-                    if (!row || row.length === 0) continue;
-                    
-                    // Try to extract user info from specific cells
-                    if (row[0] && typeof row[0] === 'string') {
-                        const lowerRow0 = row[0].toString().toLowerCase();
-                        
-                        // Check for collaborateur name
-                        if (lowerRow0.includes('collaborateur') || lowerRow0.includes('nom') || lowerRow0.includes('prénom')) {
-                            if (row[1] && typeof row[1] === 'string') {
-                                collaborateurName = row[1].trim();
-                            }
-                        }
-                        
-                        // Check for manager name
-                        if (lowerRow0.includes('manager') || lowerRow0.includes('responsable') || lowerRow0.includes('n+1')) {
-                            if (row[1] && typeof row[1] === 'string') {
-                                managerName = row[1].trim();
-                            }
-                        }
-                        
-                        // Check for société
-                        if (lowerRow0.includes('société') || lowerRow0.includes('entreprise') || lowerRow0.includes('filiale')) {
-                            if (row[1] && typeof row[1] === 'string') {
-                                societe = row[1].trim();
-                            }
-                        }
-                    }
-                    
-                    // Look for the objectives header row (assuming first column contains "Objectif")
-                    if (!foundHeader && row[0] && row[0].toString().toLowerCase().includes('objectif')) {
-                        foundHeader = true;
-                        continue;
-                    }
-                    
-                    // If header found, process data rows
-                    if (foundHeader) {
-                        // Check if this is a valid objective row (first column not empty)
-                        if (row[0] && typeof row[0] === 'string' && row[0].trim() !== '') {
-                            const isExceptional = row[0].toLowerCase().includes('exceptionnel');
-                            
-                            objectives.push({
-                              description: row[0].trim(),
-                              weight: row[1] ? parseInt(row[1]) : 0,
-                              floor: row[2] ? row[2].toString().trim() : '',
-                              satisfactory: row[3] ? row[3].toString().trim() : '', // Satisfaisant
-                              goodPerformance: row[4] ? row[4].toString().trim() : '', // Bonne performance
-                              target: row[5] ? row[5].toString().trim() : '',
-                            
-                              isExceptional: isExceptional
-                            });
-                        }
-                    }
-                }
-                
-                // Supprimer l'objectif 1 (premier objectif dans la liste)
-                if (objectives.length > 0) {
-                    objectives.shift(); // Supprime le premier élément du tableau
-                }
-                
-                return { objectives, collaborateurName, managerName, societe };
-            }
+        });
+
+        // Mettre à jour collaborateur / manager / société (à partir de la 1ère ligne rencontrée)
+        if (!collaborateurName && obj.collaborateurName) collaborateurName = obj.collaborateurName;
+        if (!managerName && obj.managerName) managerName = obj.managerName;
+        if (!societe && obj.societe) societe = obj.societe;
+
+        // Si un objectif est défini → on garde
+        if (obj.description) {
+            objectives.push(obj);
+        }
+    }
+
+    return { objectives, collaborateurName, managerName, societe };
+}
+
             
             // Tab switching functionality
             const evaluationTab = document.getElementById('evaluation-tab');
